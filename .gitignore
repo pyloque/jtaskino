@@ -1,0 +1,12 @@
+.project
+*.orig
+*.class
+.settings
+.classpath
+target
+.idea
+*.iml
+.DS_Store
+.vscode/
+.vacode
+.vscode/*
