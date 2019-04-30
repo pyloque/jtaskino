@@ -43,7 +43,7 @@ public class OnceTrigger implements Trigger {
                     ExecutorService executor, Predicate<Task> taskTaker, Task task) {
         long now = System.currentTimeMillis();
         var delay = this.getStartTime().getTime() - now;
-        if (delay > 0) {
+        if (delay >= 0) {
             return scheduler.schedule(() -> {
                 if (taskTaker.test(task)) {
                     executor.submit(task);

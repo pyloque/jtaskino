@@ -101,6 +101,18 @@ public class DistributedScheduler {
     }
 
     /**
+     * 手动触发任务运行
+     * 
+     * @param name
+     */
+    public void triggerTask(String name) {
+        var task = this.allTasks.get(name);
+        if (task != null) {
+            task.run();
+        }
+    }
+
+    /**
      * 任务变更时，必须递增版本号，才能触发其它进程的任务重新加载
      * 
      * @param version

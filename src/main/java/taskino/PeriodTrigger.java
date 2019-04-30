@@ -62,18 +62,22 @@ public class PeriodTrigger implements Trigger {
     }
 
     @Override
-    public ScheduledFuture<?> schedule(ScheduledExecutorService scheduler,
-                    ExecutorService executor, Predicate<Task> taskTaker, Task task) {
+    public ScheduledFuture<?> schedule(ScheduledExecutorService scheduler, ExecutorService executor,
+                    Predicate<Task> taskTaker, Task task) {
         long now = System.currentTimeMillis();
         if (now >= this.getEndTime().getTime()) {
             return null;
         }
         long delay = 0;
-        if (now < this.getStartTime().getTime()) {
+        if (now <= this.getStartTime().getTime()) {
             delay = this.getStartTime().getTime() - now;
         } else {
+            // 如果正好卡在周期点上那就立即执行
+            // 否则延迟到下一个周期点
             long ellapsed = (now - this.getStartTime().getTime()) % (this.getPeriod() * 1000);
-            delay = this.getPeriod() * 1000 - ellapsed;
+            if (ellapsed > 0) {
+                delay = this.getPeriod() * 1000 - ellapsed;
+            }
         }
         return scheduler.scheduleAtFixedRate(() -> {
             if (taskTaker.test(task)) {
