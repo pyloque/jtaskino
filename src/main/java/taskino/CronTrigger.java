@@ -41,9 +41,12 @@ public class CronTrigger implements Trigger {
     @Override
     public ScheduledFuture<?> schedule(ScheduledExecutorService scheduler, ExecutorService executor,
                     Predicate<Task> taskTaker, Task task) {
+        var pattern = new SchedulingPattern(this.getCronExpr());
+        // 将毫秒数清零，确保多进程同一时间争抢
         Calendar cal = Calendar.getInstance();
         var now = new Date();
-        cal.setTime(new Date());
+        cal.setTime(now);
+        cal.set(Calendar.MILLISECOND, 0);
         // 如果正好卡在分点上（second=0）那就立即执行
         // 否则延迟到下一分钟
         if (cal.get(Calendar.SECOND) != 0) {
@@ -51,9 +54,8 @@ public class CronTrigger implements Trigger {
             cal.add(Calendar.MINUTE, 1);
         }
         long delay = cal.getTimeInMillis() - now.getTime();
-        var pattern = new SchedulingPattern(this.getCronExpr());
         return scheduler.scheduleAtFixedRate(() -> {
-            if (pattern.match(new Date().getTime())) {
+            if (pattern.match(System.currentTimeMillis())) {
                 if (taskTaker.test(task)) {
                     executor.submit(task);
                 }

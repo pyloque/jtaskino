@@ -47,6 +47,12 @@ public interface Trigger {
         return new OnceTrigger(startTime);
     }
 
+    /**
+     * 不同进程调用这个函数得到的起始时间是不一样的，所以这个函数一般仅用于测试，它会导致任务在不同的进程中分配不均匀
+     * 
+     * @param delay
+     * @return
+     */
     public static OnceTrigger onceOfDelay(int delay) {
         var now = new Date();
         var cal = Calendar.getInstance();
@@ -59,6 +65,13 @@ public interface Trigger {
         return new PeriodTrigger(startTime, endTime, period);
     }
 
+    /**
+     * 不同进程调用这个函数得到的起始时间是不一样的，所以这个函数一般仅用于测试，它会导致任务在不同的进程中分配不均匀
+     * 
+     * @param delay
+     * @param period
+     * @return
+     */
     public static PeriodTrigger periodOfDelay(int delay, int period) {
         var now = new Date();
         var cal = Calendar.getInstance();
