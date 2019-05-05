@@ -64,7 +64,7 @@ public class PeriodTrigger implements Trigger {
 
     @Override
     public boolean schedule(ScheduledExecutorService scheduler, ExecutorService executor,
-                    Predicate<Task> taskTaker, Task task) {
+                    Predicate<Task> taskGrabber, Task task) {
         long now = System.currentTimeMillis();
         if (now >= this.getEndTime().getTime()) {
             return false;
@@ -81,9 +81,16 @@ public class PeriodTrigger implements Trigger {
             }
         }
         this.future = scheduler.scheduleAtFixedRate(() -> {
-            if (taskTaker.test(task)) {
-                executor.submit(task);
+            // 到结束时间了，结束定时器
+            if (System.currentTimeMillis() >= this.getEndTime().getTime()) {
+                cancel();
+                return;
             }
+            executor.submit(() -> {
+                if (taskGrabber.test(task)) {
+                    task.run();
+                }
+            });
         }, delay, this.getPeriod() * 1000, TimeUnit.MILLISECONDS);
         return this.future != null;
     }

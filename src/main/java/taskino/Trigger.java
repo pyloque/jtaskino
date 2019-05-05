@@ -22,7 +22,7 @@ public interface Trigger {
     }
 
     public boolean schedule(ScheduledExecutorService scheduler, ExecutorService executor,
-                    Predicate<Task> taskTaker, Task task);
+                    Predicate<Task> taskGrabber, Task task);
 
 
     public static Trigger build(String s) {

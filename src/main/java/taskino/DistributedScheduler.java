@@ -297,9 +297,9 @@ public class DistributedScheduler {
         scheduler.register(Trigger.once(new Date(0)), Task.of("once1", () -> {
             System.out.println("once1");
         }));
-//        scheduler.register(Trigger.period(new Date(0), 5), Task.of("period2", () -> {
-//            System.out.println("period2");
-//        }));
+        scheduler.register(Trigger.period(new Date(0), 5), Task.of("period2", () -> {
+            System.out.println("period2");
+        }));
         scheduler.register(Trigger.cronOfMinutes(2), Task.of("cron3", () -> {
             System.out.println("cron3");
         }));

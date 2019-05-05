@@ -42,13 +42,15 @@ public class OnceTrigger implements Trigger {
 
     @Override
     public boolean schedule(ScheduledExecutorService scheduler, ExecutorService executor,
-                    Predicate<Task> taskTaker, Task task) {
+                    Predicate<Task> taskGrabber, Task task) {
         var delay = this.getStartTime().getTime() - System.currentTimeMillis();
         if (delay >= 0) {
             this.future = scheduler.schedule(() -> {
-                if (taskTaker.test(task)) {
-                    executor.submit(task);
-                }
+                executor.submit(() -> {
+                    if (taskGrabber.test(task)) {
+                        task.run();
+                    }
+                });
             }, delay, TimeUnit.MILLISECONDS);
         }
         return this.future != null;

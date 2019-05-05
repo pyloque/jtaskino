@@ -61,9 +61,7 @@ public class RedisTaskStore implements ITaskStore {
     public void saveAllTriggers(long version, Map<String, String> triggers) {
         this.redis.execute(jedis -> {
             var key = keyFor("triggers");
-            triggers.forEach((name, triggerRaw) -> {
-                jedis.hset(key, name, triggerRaw);
-            });
+            jedis.hmset(key, triggers);
             jedis.hkeys(key).forEach(name -> {
                 if (!triggers.containsKey(name)) {
                     LOG.warn("deleting unused task {} in redis", name);
