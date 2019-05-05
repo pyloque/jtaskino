@@ -16,6 +16,7 @@ public class PeriodTrigger implements Trigger {
     private Date endTime;
     // 间隔多少秒
     private int period;
+    private ScheduledFuture<?> future;
 
     public PeriodTrigger() {}
 
@@ -62,11 +63,11 @@ public class PeriodTrigger implements Trigger {
     }
 
     @Override
-    public ScheduledFuture<?> schedule(ScheduledExecutorService scheduler, ExecutorService executor,
+    public boolean schedule(ScheduledExecutorService scheduler, ExecutorService executor,
                     Predicate<Task> taskTaker, Task task) {
         long now = System.currentTimeMillis();
         if (now >= this.getEndTime().getTime()) {
-            return null;
+            return false;
         }
         long delay = 0;
         if (now <= this.getStartTime().getTime()) {
@@ -79,11 +80,34 @@ public class PeriodTrigger implements Trigger {
                 delay = this.getPeriod() * 1000 - ellapsed;
             }
         }
-        return scheduler.scheduleAtFixedRate(() -> {
+        this.future = scheduler.scheduleAtFixedRate(() -> {
             if (taskTaker.test(task)) {
                 executor.submit(task);
             }
         }, delay, this.getPeriod() * 1000, TimeUnit.MILLISECONDS);
+        return this.future != null;
+    }
+
+    @Override
+    public void cancel() {
+        if (this.future != null) {
+            this.future.cancel(false);
+        }
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof PeriodTrigger)) {
+            return false;
+        }
+        var otherTrigger = (PeriodTrigger) other;
+        if (!this.startTime.equals(otherTrigger.startTime)) {
+            return false;
+        }
+        if (!this.endTime.equals(otherTrigger.endTime)) {
+            return false;
+        }
+        return this.period == otherTrigger.period;
     }
 
 }

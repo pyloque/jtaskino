@@ -12,6 +12,7 @@ import it.sauronsoftware.cron4j.SchedulingPattern;
 public class CronTrigger implements Trigger {
 
     private String cronExpr;
+    private ScheduledFuture<?> future;
 
     public CronTrigger() {}
 
@@ -39,7 +40,7 @@ public class CronTrigger implements Trigger {
     }
 
     @Override
-    public ScheduledFuture<?> schedule(ScheduledExecutorService scheduler, ExecutorService executor,
+    public boolean schedule(ScheduledExecutorService scheduler, ExecutorService executor,
                     Predicate<Task> taskTaker, Task task) {
         var pattern = new SchedulingPattern(this.getCronExpr());
         // 将毫秒数清零，确保多进程同一时间争抢
@@ -48,19 +49,34 @@ public class CronTrigger implements Trigger {
         cal.setTime(now);
         cal.set(Calendar.MILLISECOND, 0);
         // 如果正好卡在分点上（second=0）那就立即执行
-        // 否则延迟到下一分钟
         if (cal.get(Calendar.SECOND) != 0) {
             cal.set(Calendar.SECOND, 0);
             cal.add(Calendar.MINUTE, 1);
         }
         long delay = cal.getTimeInMillis() - now.getTime();
-        return scheduler.scheduleAtFixedRate(() -> {
+        this.future = scheduler.scheduleAtFixedRate(() -> {
             if (pattern.match(System.currentTimeMillis())) {
                 if (taskTaker.test(task)) {
                     executor.submit(task);
                 }
             }
         }, delay, 60 * 1000, TimeUnit.MILLISECONDS);
+        return this.future != null;
+    }
+
+    @Override
+    public void cancel() {
+        if (this.future != null) {
+            this.future.cancel(false);
+        }
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof CronTrigger)) {
+            return false;
+        }
+        return this.cronExpr.equals(((CronTrigger) other).cronExpr);
     }
 
 }

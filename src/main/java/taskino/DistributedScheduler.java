@@ -1,13 +1,13 @@
 package taskino;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +20,8 @@ import org.slf4j.LoggerFactory;
  * 调度器是单一的线程
  * 
  * 任务运行器是一个线程池，默认大小为 cores * 2
+ * 
+ * 利用全局版本号来控制任务重加载（变更的任务）
  * 
  * @author qianwp
  *
@@ -45,11 +47,11 @@ public class DistributedScheduler {
     // 任务运行器（运行线程）
     private ExecutorService executor;
 
-    // 正在运行的任务Future，用于取消任务
-    private Map<String, ScheduledFuture<?>> futures = new HashMap<>();
-
     // 任务完成监听器
     private List<ISchedulerListener> listeners = new ArrayList<>();
+
+    // 待重加载的触发器
+    private Map<String, Trigger> reloadingTriggers = new HashMap<>();
 
     public DistributedScheduler(ITaskStore store) {
         this(store, Runtime.getRuntime().availableProcessors() * 2);
@@ -161,14 +163,11 @@ public class DistributedScheduler {
                 return;
             }
             LOG.info("scheduling task {}", name);
-            var future = trigger.schedule(scheduler, executor, this::takeTaskSilently, task);
-            if (future != null) {
-                futures.put(name, future);
-            }
+            trigger.schedule(scheduler, executor, this::grabTaskSilently, task);
         });
     }
 
-    private boolean takeTaskSilently(Task task) {
+    private boolean grabTaskSilently(Task task) {
         if (task.isConcurrent()) {
             return true;
         }
@@ -180,9 +179,28 @@ public class DistributedScheduler {
         }
     }
 
-    private void rescheduleTasks() {
-        this.cancelAllTasks();
-        this.scheduleTasks();
+    private synchronized void rescheduleTasks() {
+        this.reloadingTriggers.forEach((name, trigger) -> {
+            var task = this.allTasks.get(name);
+            if (trigger == null) {
+                // deleting
+                LOG.warn("unscheduling task {}", name);
+                triggers.get(name).cancel();
+                triggers.remove(name);
+            } else {
+                var oldTrigger = triggers.get(name);
+                if (oldTrigger != null) {
+                    // updating, cancel the old first
+                    LOG.warn("unscheduling task {}", name);
+                    oldTrigger.cancel();
+                }
+                triggers.put(name, trigger);
+                // new
+                LOG.warn("scheduling task {}", name);
+                trigger.schedule(scheduler, executor, this::grabTaskSilently, task);
+            }
+        });
+        this.reloadingTriggers.clear();
         // 回调
         for (var listener : listeners) {
             try {
@@ -193,12 +211,12 @@ public class DistributedScheduler {
         }
     }
 
-    private void cancelAllTasks() {
-        this.futures.forEach((name, future) -> {
+    private synchronized void cancelAllTasks() {
+        this.triggers.forEach((name, trigger) -> {
             LOG.warn("cancelling task {}", name);
-            future.cancel(false);
+            trigger.cancel();
         });
-        this.futures.clear();
+        this.triggers.clear();
     }
 
     public void stop() {
@@ -242,7 +260,7 @@ public class DistributedScheduler {
         var remoteVersion = store.getRemoteVersion();
         if (remoteVersion > version) {
             this.version = remoteVersion;
-            LOG.warn("version changed! reload triggers then reschedule all tasks");
+            LOG.warn("version changed! reload triggers then reschedule changed tasks");
             this.reload();
             return true;
         }
@@ -251,33 +269,44 @@ public class DistributedScheduler {
 
     private void reload() {
         var raws = store.getAllTriggers();
-        this.triggers.clear();
+        var reloadings = new HashMap<String, Trigger>();
         raws.forEach((name, raw) -> {
             // 内存里必须有这个任务（新增任务，老版本的进程里就没有）
             if (this.allTasks.containsKey(name)) {
                 var trigger = Trigger.build(raw);
-                this.triggers.put(name, trigger);
+                var oldTrigger = this.triggers.get(name);
+                if (oldTrigger == null || !oldTrigger.equals(trigger)) {
+                    // new or changed
+                    reloadings.put(name, trigger);
+                }
             }
         });
+        // deleted
+        this.triggers.forEach((name, trigger) -> {
+            if (!raws.containsKey(name)) {
+                reloadings.put(name, null);
+            }
+        });
+        this.reloadingTriggers = reloadings;
     }
 
     public static void main(String[] args) {
         var redis = new RedisStore();
         var store = new RedisTaskStore(redis, "sample");
         var scheduler = new DistributedScheduler(store, 5);
-        scheduler.register(Trigger.onceOfDelay(5), Task.of("once1", () -> {
+        scheduler.register(Trigger.once(new Date(0)), Task.of("once1", () -> {
             System.out.println("once1");
         }));
-        scheduler.register(Trigger.periodOfDelay(5, 5), Task.of("period2", () -> {
-            System.out.println("period2");
-        }));
-        scheduler.register(Trigger.cronOfMinutes(1), Task.of("cron3", () -> {
+//        scheduler.register(Trigger.period(new Date(0), 5), Task.of("period2", () -> {
+//            System.out.println("period2");
+//        }));
+        scheduler.register(Trigger.cronOfMinutes(2), Task.of("cron3", () -> {
             System.out.println("cron3");
         }));
-        scheduler.register(Trigger.periodOfDelay(5, 10), Task.of("period4", () -> {
+        scheduler.register(Trigger.period(new Date(0), 10), Task.of("period4", () -> {
             System.out.println("period4");
         }));
-        scheduler.version(3);
+        scheduler.version(4);
         scheduler.listener(ctx -> {
             System.out.println(ctx.task().name() + " is complete");
         });

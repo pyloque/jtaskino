@@ -11,6 +11,8 @@ public class OnceTrigger implements Trigger {
 
     private Date startTime;
 
+    private ScheduledFuture<?> future;
+
     public OnceTrigger() {}
 
     public OnceTrigger(Date startTime) {
@@ -39,17 +41,32 @@ public class OnceTrigger implements Trigger {
     }
 
     @Override
-    public ScheduledFuture<?> schedule(ScheduledExecutorService scheduler, ExecutorService executor,
+    public boolean schedule(ScheduledExecutorService scheduler, ExecutorService executor,
                     Predicate<Task> taskTaker, Task task) {
         var delay = this.getStartTime().getTime() - System.currentTimeMillis();
         if (delay >= 0) {
-            return scheduler.schedule(() -> {
+            this.future = scheduler.schedule(() -> {
                 if (taskTaker.test(task)) {
                     executor.submit(task);
                 }
             }, delay, TimeUnit.MILLISECONDS);
         }
-        return null;
+        return this.future != null;
+    }
+
+    @Override
+    public void cancel() {
+        if (this.future != null) {
+            this.future.cancel(false);
+        }
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof OnceTrigger)) {
+            return false;
+        }
+        return this.startTime.equals(((OnceTrigger) other).startTime);
     }
 
 }

@@ -4,7 +4,6 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.function.Predicate;
 import it.sauronsoftware.cron4j.SchedulingPattern;
 
@@ -16,11 +15,13 @@ public interface Trigger {
 
     public String serialize();
 
+    public void cancel();
+
     public default String s() {
         return String.format("%s@%s", type().name(), serialize());
     }
 
-    public ScheduledFuture<?> schedule(ScheduledExecutorService scheduler, ExecutorService executor,
+    public boolean schedule(ScheduledExecutorService scheduler, ExecutorService executor,
                     Predicate<Task> taskTaker, Task task);
 
 
@@ -63,6 +64,10 @@ public interface Trigger {
 
     public static PeriodTrigger period(Date startTime, Date endTime, int period) {
         return new PeriodTrigger(startTime, endTime, period);
+    }
+
+    public static PeriodTrigger period(Date startTime, int period) {
+        return period(startTime, new Date(Long.MAX_VALUE), period);
     }
 
     /**
