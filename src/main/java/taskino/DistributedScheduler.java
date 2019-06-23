@@ -258,7 +258,7 @@ public class DistributedScheduler {
 
     private boolean reloadIfChanged() {
         var remoteVersion = store.getRemoteVersion();
-        if (remoteVersion > version) {
+        if (remoteVersion != version) {
             this.version = remoteVersion;
             LOG.warn("version changed! reload triggers then reschedule changed tasks");
             this.reload();
